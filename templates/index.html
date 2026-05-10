@@ -1,9 +1,161 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>AI Squat Trainer</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Squat Trainer</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    h1 {
+      margin-top: 20px;
+    }
+
+    .container {
+      position: relative;
+      width: 900px;
+      max-width: 95%;
+      margin: auto;
+    }
+
+    video,
+    canvas {
+      width: 100%;
+      border-radius: 12px;
+    }
+
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    .counter {
+      font-size: 30px;
+      margin-top: 20px;
+      font-weight: bold;
+      color: #00ff88;
+    }
+  </style>
 </head>
 <body>
-    <h1>AI Squat Trainer Running Successfully</h1>
+
+  <h1>AI Squat Trainer</h1>
+
+  <div class="container">
+    <video class="input_video" autoplay playsinline></video>
+    <canvas class="output_canvas"></canvas>
+  </div>
+
+  <div class="counter">
+    Squats Count: <span id="count">0</span>
+  </div>
+
+  <script>
+    const videoElement = document.querySelector('.input_video');
+    const canvasElement = document.querySelector('.output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const countElement = document.getElementById('count');
+
+    let squatCount = 0;
+    let stage = 'up';
+
+    function calculateAngle(a, b, c) {
+      const radians = Math.atan2(c.y - b.y, c.x - b.x) -
+                      Math.atan2(a.y - b.y, a.x - b.x);
+
+      let angle = Math.abs(radians * 180.0 / Math.PI);
+
+      if (angle > 180.0) {
+        angle = 360 - angle;
+      }
+
+      return angle;
+    }
+
+    function onResults(results) {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      canvasCtx.drawImage(
+        results.image,
+        0,
+        0,
+        canvasElement.width,
+        canvasElement.height
+      );
+
+      if (results.poseLandmarks) {
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+          { color: '#00FF00', lineWidth: 4 });
+
+        drawLandmarks(canvasCtx, results.poseLandmarks,
+          { color: '#FF0000', lineWidth: 2 });
+
+        const hip = results.poseLandmarks[24];
+        const knee = results.poseLandmarks[26];
+        const ankle = results.poseLandmarks[28];
+
+        const angle = calculateAngle(hip, knee, ankle);
+
+        if (angle > 160) {
+          stage = 'up';
+        }
+
+        if (angle < 90 && stage === 'up') {
+          stage = 'down';
+          squatCount++;
+          countElement.innerText = squatCount;
+        }
+
+        canvasCtx.font = '30px Arial';
+        canvasCtx.fillStyle = 'yellow';
+        canvasCtx.fillText('Knee Angle: ' + Math.round(angle), 20, 40);
+      }
+
+      canvasCtx.restore();
+    }
+
+    const pose = new Pose({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+      }
+    });
+
+    pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    pose.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await pose.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720
+    });
+
+    camera.start();
+  </script>
+
 </body>
 </html>
