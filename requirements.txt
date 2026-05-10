@@ -1,0 +1,6 @@
+flask
+gunicorn
+opencv-python
+mediapipe>=0.10
+numpy
+pyinstaller
